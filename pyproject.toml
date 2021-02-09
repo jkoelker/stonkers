@@ -1,0 +1,42 @@
+#
+
+[tool.black]
+line-length = 79
+
+[tool.poetry]
+name = "stonkers"
+version = "0.0.1"
+description = "Stonkers"
+authors = ["Jason Kölker <jason@koelker.net>"]
+license = "MIT"
+readme = "README.rst"
+homepage = "https://github.com/jkoelker/stonkers"
+repository = "https://github.com/jkoelker/stonkers"
+classifiers = [
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+]
+
+[tool.poetry.urls]
+Changelog = "https://github.com/jkoelker/stonkers/releases"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+tda-api = "^1.1.1"
+pyyaml = "^5.4.1"
+pandas = "^1.2.1"
+tabulate = "^0.8.7"
+
+[tool.poetry.dev-dependencies]
+black = "^20.8b1"
+ipython = "^7.20.0"
+datascroller = "^1.4.1"
+
+[tool.poetry.scripts]
+stonkers = "stonkers.cli:cli"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "Poetry.core.masonry.api"
