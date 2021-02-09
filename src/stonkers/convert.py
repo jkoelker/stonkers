@@ -68,3 +68,18 @@ def options(data):
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
     return df
+
+
+def positions(data):
+    """positions list as a dataframe"""
+    ret = []
+
+    for position in data:
+        instrument = position.pop("instrument", {})
+        for col in ("assetType", "cusip", "symbol"):
+            if col in instrument:
+                position[col] = instrument[col]
+
+        ret.append(position)
+
+    return pd.DataFrame(ret).set_index("symbol")

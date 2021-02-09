@@ -39,3 +39,14 @@ class Client(object):
             return convert.quote(quotes)
 
         return quotes
+
+    def positions(self, account_id, dataframe=True):
+        account = self.account(
+            account_id, fields=self.tda.Account.Fields.POSITIONS
+        )
+        positions = account["positions"][0]
+
+        if dataframe:
+            return convert.positions(positions)
+
+        return positions

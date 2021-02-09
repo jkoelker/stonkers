@@ -136,10 +136,91 @@ def list(stonkers):
 
 @account.command()
 @click.help_option("-h", "--help")
+@click.argument("account_id")
+@click.argument("funds", type=float)
 @click.pass_obj
-def rebalance(stonkers):
+def rebalance(stonkers, account_id, funds):
     """Rebalance."""
-    pass
+    # TODO(jkoelker) make this configurable
+    # 90% stock 10% bonds portfolio
+    # bonds: 80% domestic 20% international
+    # stock: 60% domestic 30% international 5% reit 5% tech
+    risk = 90
+    bonds = 100 - risk
+    allocations = pd.Series(
+        {
+            "VGT": risk * 0.05 / 100,  # Vanguard Information Technology ETF
+            "VNQ": risk * 0.05 / 100,  # Vanguard Real Estate ETF
+            "VTI": risk * 0.6 / 100,  # Vanguard Total Stock Market ETF
+            "VXUS": risk * 0.3 / 100,  # Vanguard Total International Stock ETF
+            "BND": bonds * 0.8 / 100,  # Vanguard Total Bond Market ETF
+            "BNDX": bonds * 0.2 / 100,  # Vanguard Total International Bond ETF
+        }
+    )
+
+    positions = stonkers.client.positions(account_id)
+    portfolio = positions["longQuantity"].reindex(allocations.keys()).fillna(0)
+    prices = stonkers.client.quote(portfolio.keys())["askPrice"]
+
+    shares = commands.rebalance(
+        stonkers.client, allocations, funds, portfolio, prices
+    )
+
+    cost = shares * prices
+    buy = pd.DataFrame({"Shares": shares, "Cost": cost})
+    buy.index.name = "Symbol"
+    buy.loc["Total"] = pd.Series(buy["Cost"].sum(), index=("Cost",))
+    buy["Cost"] = buy["Cost"].apply("{:,.2f}".format)
+
+    def display_portfolio(portfolio, prices, allocations):
+        values = portfolio * prices
+        value = sum(values)
+        balance = portfolio * prices / value
+        drift = balance - allocations
+
+        summary = pd.DataFrame(
+            {
+                "Shares": portfolio,
+                "Value": values,
+                "Price": prices,
+                "Balance": balance,
+                "Allocation": allocations,
+                "Drift": drift,
+            }
+        )
+        summary.index.name = "Symbol"
+        summary.loc["Total"] = pd.Series(
+            summary["Value"].sum(), index=("Value",)
+        )
+
+        number_fields = ["Shares", "Value", "Price"]
+        percentage_fields = ["Balance", "Allocation", "Drift"]
+
+        summary[number_fields] = summary[number_fields].applymap(
+            "{:,.2f}".format
+        )
+        summary[percentage_fields] = summary[percentage_fields].applymap(
+            "{:,.2%}".format
+        )
+
+        return summary
+
+    print("Current Portfolio:")
+    current = display_portfolio(portfolio, prices, allocations)
+    print(stonkers.format(current))
+    print()
+
+    print(
+        "Buy for a total cost of ${0:,.2f} (${1:,.2f} left)".format(
+            sum(cost), funds - sum(cost)
+        )
+    )
+    print(stonkers.format(buy))
+    print()
+
+    print("Result Portfolio:")
+    result = display_portfolio(portfolio + shares, prices, allocations)
+    print(stonkers.format(result))
 
 
 @cli.command()
