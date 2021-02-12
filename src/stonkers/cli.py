@@ -223,7 +223,14 @@ def rebalance(stonkers, account_id, funds):
     print(stonkers.format(result))
 
 
-@cli.command()
+@cli.group()
+@click.help_option("-h", "--help")
+def options():
+    """Options Functions."""
+    pass
+
+
+@options.command()
 @click.option("-d", "--dte", default=60, help="Days to expiration.")
 @click.option(
     "-p", "--pop-min", default=70, help="Probability of Profit minimum."
