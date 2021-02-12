@@ -223,7 +223,92 @@ def rebalance(stonkers, account_id, funds):
     print(stonkers.format(result))
 
 
-@cli.command()
+@cli.group()
+@click.help_option("-h", "--help")
+def options():
+    """Options Functions."""
+    pass
+
+
+@options.command()
+@click.option("-d", "--dte", default=5, help="Days to expiration.")
+@click.argument("account_id")
+@click.help_option("-h", "--help")
+@click.pass_obj
+def expiring(stonkers, dte, account_id):
+    """Find option positions that are expiring within DTE."""
+    positions = stonkers.client.positions(account_id)
+
+    options = positions[
+        positions["assetType"] == stonkers.client.tda.Markets.OPTION.value
+    ]
+
+    prices = stonkers.client.quote(options.index)
+
+    # NOTE(jkoelker) Make a new DataFrame so it is is not a view
+    expiring = pd.DataFrame(prices[prices["daysToExpiration"] <= dte])
+
+    expiring["quantity"] = options["longQuantity"] - options["shortQuantity"]
+    expiring["premium"] = expiring["quantity"] * options["averagePrice"]
+
+    expiring["profitLoss"] = (
+        pd.DataFrame.where(
+            cond=(expiring["quantity"] > 0),
+            self=expiring["quantity"] * expiring["bidPrice"],
+            other=expiring["quantity"] * expiring["askPrice"],
+        )
+        - expiring["premium"]
+    )
+
+    expiring["expirationDate"] = pd.to_datetime(
+        expiring[
+            ["expirationYear", "expirationMonth", "expirationDay"]
+        ].rename(
+            columns={
+                "expirationYear": "year",
+                "expirationMonth": "month",
+                "expirationDay": "day",
+            }
+        )
+    )
+    expiring["expirationDate"] = expiring["expirationDate"].dt.date
+
+    expiring.reset_index(level=0, inplace=True)
+
+    expiring = expiring[
+        [
+            "symbol",
+            "quantity",
+            "underlyingPrice",
+            "strikePrice",
+            "expirationDate",
+            "daysToExpiration",
+            "bidPrice",
+            "askPrice",
+            "premium",
+            "profitLoss",
+        ]
+    ]
+
+    expiring = expiring.rename(
+        columns={
+            "symbol": "💸",
+            "quantity": "Quantity",
+            "underlyingPrice": "Underlying",
+            "strikePrice": "Strike",
+            "expirationDate": "Exp Date",
+            "daysToExpiration": "DTE",
+            "bidPrice": "Bid",
+            "askPrice": "Ask",
+            "premium": "Premium",
+            "profitLoss": "P/L Open",
+        }
+    )
+
+    print(stonkers.format(expiring, index=False))
+
+
+@options.command()
 @click.option("-d", "--dte", default=60, help="Days to expiration.")
 @click.option(
     "-p", "--pop-min", default=70, help="Probability of Profit minimum."
