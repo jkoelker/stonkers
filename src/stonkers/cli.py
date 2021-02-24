@@ -3,9 +3,11 @@
 import functools
 import json
 import os
+import urllib.parse
 
 import click
 import pandas as pd
+import requests
 import yaml
 
 from . import auth, client, commands
@@ -20,11 +22,28 @@ OUTPUT_YAML = "yaml"
 OUTPUT_CONSOLE = "console"
 
 
+class ThetaGang(object):
+    HOST = "https://api.thetagang.com"
+
+    def trending(self):
+        url = urllib.parse.urljoin(self.HOST, "/trends")
+        r = requests.get(url)
+
+        if not r.ok:
+            return []
+
+        return r.json().get("data", {}).get("trends", [])
+
+
 class Stonkers(object):
     def __init__(self, creds_file, output_format, token_file):
         self.creds_file = creds_file
         self.output_format = output_format
         self.token_file = token_file
+
+    @functools.cached_property
+    def thetagang(self):
+        return ThetaGang()
 
     @functools.cached_property
     def client(self):
@@ -322,6 +341,9 @@ def expiring(stonkers, dte, account_id):
 @click.pass_obj
 def puts(stonkers, dte, pop_min, pop_max, return_min, tickers):
     """Find options that meet an anual rate of return requirement."""
+    if not tickers:
+        tickers = stonkers.thetagang.trending()
+
     if not tickers:
         tickers = ("GME",)
 
