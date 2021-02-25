@@ -77,6 +77,9 @@ class Stonkers(object):
         return yaml.dump(data)
 
 
+click.option = functools.partial(click.option, show_default=True)
+
+
 @click.group()
 @click.option(
     "-c",
