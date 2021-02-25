@@ -339,16 +339,21 @@ def expiring(stonkers, dte, account_id):
     "-P", "--pop-max", default=90, help="Probability of Profit maximum."
 )
 @click.option("-r", "--return-min", default=20, help="Retun minimum value.")
+@click.option(
+    "-e", "--exclude", multiple=True, help="Exclude a ticker explicitly."
+)
 @click.argument("tickers", nargs=-1)
 @click.help_option("-h", "--help")
 @click.pass_obj
-def puts(stonkers, dte, pop_min, pop_max, return_min, tickers):
+def puts(stonkers, dte, pop_min, pop_max, return_min, exclude, tickers):
     """Find options that meet an anual rate of return requirement."""
     if not tickers:
         tickers = stonkers.thetagang.trending()
 
     if not tickers:
         tickers = ("GME",)
+
+    tickers = [t for t in tickers if t not in exclude]
 
     puts = commands.put_finder(
         stonkers.client, tickers, dte, pop_min, pop_max, return_min
