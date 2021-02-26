@@ -270,6 +270,10 @@ def expiring(stonkers, dte, account_id):
     # NOTE(jkoelker) Make a new DataFrame so it is is not a view
     expiring = pd.DataFrame(prices[prices["daysToExpiration"] <= dte])
 
+    if expiring.empty:
+        print("Nothing expiring in {} days".format(dte))
+        return
+
     expiring["quantity"] = options["longQuantity"] - options["shortQuantity"]
     expiring["premium"] = expiring["quantity"] * options["averagePrice"]
 
