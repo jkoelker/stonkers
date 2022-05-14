@@ -152,6 +152,8 @@ def account():
 @click.pass_obj
 def list(stonkers):
     """List account IDs."""
+    pricipals = stonkers.client.user_principals()
+    print(stonkers.format(pricipals))
     accounts = stonkers.client.accounts()
     print(stonkers.format(accounts.index.to_series(), index=False))
 

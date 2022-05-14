@@ -83,3 +83,7 @@ def positions(data):
         ret.append(position)
 
     return pd.DataFrame(ret).set_index("symbol")
+
+
+def user_principals(data):
+    return pd.json_normalize(data)
