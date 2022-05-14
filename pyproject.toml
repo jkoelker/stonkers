@@ -33,7 +33,7 @@ jinja2 = "^3.0.3"
 requests = "^2.26.0"
 
 [tool.poetry.dev-dependencies]
-black = "^21.12b0"
+black = "^22.3"
 ipython = "^7.30.1"
 datascroller = "^1.4.1"
 
