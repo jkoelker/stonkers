@@ -160,14 +160,14 @@ def list(stonkers):
 @click.help_option("-h", "--help")
 @click.argument("account_id")
 @click.argument("funds", type=float)
+@click.option('--risk', '-r', default=90)
 @click.pass_obj
-def rebalance(stonkers, account_id, funds):
+def rebalance(stonkers, account_id, funds, risk):
     """Rebalance."""
     # TODO(jkoelker) make this configurable
     # 90% stock 10% bonds portfolio
     # bonds: 80% domestic 20% international
     # stock: 60% domestic 30% international 5% reit 5% tech
-    risk = 90
     bonds = 100 - risk
     allocations = pd.Series(
         {
@@ -278,9 +278,8 @@ def expiring(stonkers, dte, account_id):
     expiring["premium"] = expiring["quantity"] * options["averagePrice"]
 
     expiring["profitLoss"] = (
-        pd.DataFrame.where(
+        (expiring["quantity"] * expiring["bidPrice"]).where(
             cond=(expiring["quantity"] > 0),
-            self=expiring["quantity"] * expiring["bidPrice"],
             other=expiring["quantity"] * expiring["askPrice"],
         )
         - expiring["premium"]
