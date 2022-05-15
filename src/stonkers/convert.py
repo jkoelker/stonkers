@@ -7,9 +7,7 @@ import pandas as pd
 
 def accounts(data):
     """accounts as dataframe"""
-    return pd.concat(
-        pd.json_normalize(v["securitiesAccount"]) for v in data.values()
-    ).set_index("accountId")
+    return pd.json_normalize(data.values()).set_index("accountId")
 
 
 def transactions(data):
