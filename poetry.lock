@@ -719,7 +719,7 @@ widechars = ["wcwidth"]
 
 [[package]]
 name = "tda-api"
-version = "1.5"
+version = "1.5.3"
 description = "An unofficial wrapper around the TD Ameritrade HTTP API."
 category = "main"
 optional = false
@@ -851,7 +851,7 @@ h11 = ">=0.9.0,<1"
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.10,<3.11"
-content-hash = "436d391de50aa50ae8998969767d22596c1872914f8836c78123a257e5216cd8"
+content-hash = "cdf9fd0f4c8aa20bcfe122dfa8c2bef9ccf70d6cb3130e70622859e67200f79b"
 
 [metadata.files]
 anyio = [
@@ -1466,8 +1466,8 @@ tabulate = [
     {file = "tabulate-0.8.9.tar.gz", hash = "sha256:eb1d13f25760052e8931f2ef80aaf6045a6cceb47514db8beab24cded16f13a7"},
 ]
 tda-api = [
-    {file = "tda-api-1.5.tar.gz", hash = "sha256:1576e637740457c0d90ce7dbcd99b3c244ea074e3c246b20a4a7d10cdeb54f3f"},
-    {file = "tda_api-1.5-py2.py3-none-any.whl", hash = "sha256:3c8b56d5879e5ba627f5ace43935e251953176a1d89a9259549fe363349ba19a"},
+    {file = "tda-api-1.5.3.tar.gz", hash = "sha256:4b0591c0567e17ac956870ef9f80175f9c94181c0d1c803c4b284a311272b296"},
+    {file = "tda_api-1.5.3-py2.py3-none-any.whl", hash = "sha256:c402f43ceb3ef966f4af7a2b4432d59173ffb3e2e6a07465def280b59b44a169"},
 ]
 toml = [
     {file = "toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b"},
