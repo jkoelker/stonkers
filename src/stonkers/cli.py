@@ -169,7 +169,7 @@ def list(stonkers):
 @click.help_option("-h", "--help")
 @click.argument("account_id")
 @click.argument("funds", type=float)
-@click.option('--risk', '-r', default=90)
+@click.option("--risk", "-r", default=90)
 @click.pass_obj
 def rebalance(stonkers, account_id, funds, risk):
     """Rebalance."""
@@ -287,12 +287,13 @@ def expiring(stonkers, dte, account_id):
     expiring["premium"] = expiring["quantity"] * options["averagePrice"]
 
     expiring["profitLoss"] = (
-        (expiring["quantity"] * expiring["bidPrice"]).where(
-            cond=(expiring["quantity"] > 0),
-            other=expiring["quantity"] * expiring["askPrice"],
-        )
-        - expiring["premium"]
-    )
+        expiring["quantity"] * expiring["bidPrice"]
+    ).where(
+        cond=(expiring["quantity"] > 0),
+        other=expiring["quantity"] * expiring["askPrice"],
+    ) - expiring[
+        "premium"
+    ]
 
     expiring["expirationDate"] = pd.to_datetime(
         expiring[
