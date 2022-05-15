@@ -152,10 +152,17 @@ def account():
 @click.pass_obj
 def list(stonkers):
     """List account IDs."""
-    pricipals = stonkers.client.user_principals()
-    print(stonkers.format(pricipals))
     accounts = stonkers.client.accounts()
-    print(stonkers.format(accounts.index.to_series(), index=False))
+    accounts = accounts[["displayName", "currentBalances.moneyMarketFund"]]
+
+    accounts = accounts.rename(
+        columns={
+            "displayName": "Name",
+            "currentBalances.moneyMarketFund": "Money Market",
+        }
+    )
+
+    print(stonkers.format(accounts))
 
 
 @account.command()
