@@ -366,7 +366,10 @@ def puts(stonkers, dte, pop_min, pop_max, return_min, exclude, tickers):
     if not tickers:
         tickers = ("GME",)
 
-    tickers = [t for t in tickers if t not in exclude]
+    tickers = [
+        t["symbol"] for t in tickers
+        if t.get("symbol") not in exclude + (None,)
+    ]
 
     puts = commands.put_finder(
         stonkers.client, tickers, dte, pop_min, pop_max, return_min
