@@ -9,8 +9,8 @@ import os
 import urllib.parse
 
 import click
+import httpx
 import pandas as pd
-import requests
 import yaml
 
 from . import auth, client, commands
@@ -35,9 +35,11 @@ class ThetaGang:  # pylint:disable=too-few-public-methods
     def trending(self):
         """Get trending tickers from ThetaGang."""
         url = urllib.parse.urljoin(self.HOST, "/trends")
-        request = requests.get(url, timeout=5)
+        request = httpx.get(url, timeout=5)
 
-        if not request.ok:
+        try:
+            request.raise_for_status()
+        except httpx.HTTPError:
             return []
 
         return request.json().get("data", {}).get("trends", [])
