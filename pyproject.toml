@@ -23,7 +23,7 @@ classifiers = [
 Changelog = "https://github.com/jkoelker/stonkers/releases"
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.11"
+python = ">=3.10"
 tda-api = "^1.6.0"
 pyyaml = "^6.0.0"
 pandas = "^1.5.1"
@@ -40,6 +40,9 @@ datascroller = "^1.4.1"
 
 [tool.poetry.scripts]
 stonkers = "stonkers.cli:cli"
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.0.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
