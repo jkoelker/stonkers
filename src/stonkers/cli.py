@@ -1,4 +1,7 @@
 #
+"""
+Stonkers CLI.
+"""
 
 import functools
 import json
@@ -22,20 +25,29 @@ OUTPUT_YAML = "yaml"
 OUTPUT_CONSOLE = "console"
 
 
-class ThetaGang(object):
+class ThetaGang:  # pylint:disable=too-few-public-methods
+    """
+    ThetaGang is a wrapper around the ThetaGang API.
+    """
+
     HOST = "https://api.thetagang.com"
 
     def trending(self):
+        """Get trending tickers from ThetaGang."""
         url = urllib.parse.urljoin(self.HOST, "/trends")
-        r = requests.get(url)
+        request = requests.get(url, timeout=5)
 
-        if not r.ok:
+        if not request.ok:
             return []
 
-        return r.json().get("data", {}).get("trends", [])
+        return request.json().get("data", {}).get("trends", [])
 
 
-class Stonkers(object):
+class Stonkers:
+    """
+    Stonkers is the main object for the CLI.
+    """
+
     def __init__(self, creds_file, output_format, token_file):
         self.creds_file = creds_file
         self.output_format = output_format
@@ -43,12 +55,14 @@ class Stonkers(object):
 
     @functools.cached_property
     def thetagang(self):
+        """ThetaGang API."""
         return ThetaGang()
 
     @functools.cached_property
     def client(self):
-        with click.open_file(self.creds_file, "r") as f:
-            config = yaml.safe_load(f)
+        """TD Ameritrade Client."""
+        with click.open_file(self.creds_file, "r") as file:
+            config = yaml.safe_load(file)
             return client.Client(
                 auth.get_client(
                     config[API_KEY], config[REDIRECT_URI], self.token_file
@@ -56,6 +70,7 @@ class Stonkers(object):
             )
 
     def format(self, data, **kwargs):
+        """Format the data based on the output format."""
         if self.output_format == OUTPUT_JSON:
             if hasattr(data, "to_json"):
                 return data.to_json(orient="records", indent=2)
@@ -110,6 +125,7 @@ click.option = functools.partial(click.option, show_default=True)
 @click.help_option("-h", "--help")
 @click.pass_context
 def cli(ctx, creds_file, output, token_file):
+    """Main CLI Entrypoint"""
     ctx.obj = Stonkers(creds_file, output, token_file)
 
 
@@ -137,20 +153,20 @@ def setup(stonkers, api_key, redirect_uri):
         os.chmod(stonkers.creds_file, 0o600)
 
     # NOTE(jkoelker) Access the property to kick off the login flow
-    stonkers.client
+    if stonkers.client is not None:
+        print("Setup complete")
 
 
 @cli.group()
 @click.help_option("-h", "--help")
 def account():
     """Account Functions."""
-    pass
 
 
-@account.command()
+@account.command(name="list")
 @click.help_option("-h", "--help")
 @click.pass_obj
-def list(stonkers):
+def list_accounts(stonkers):
     """List account IDs."""
     accounts = stonkers.client.accounts()
     accounts = accounts[["displayName", "currentBalances.moneyMarketFund"]]
@@ -201,7 +217,7 @@ def rebalance(stonkers, account_id, funds, risk):
     buy = pd.DataFrame({"Shares": shares, "Cost": cost})
     buy.index.name = "Symbol"
     buy.loc["Total"] = pd.Series(buy["Cost"].sum(), index=("Cost",))
-    buy["Cost"] = buy["Cost"].apply("{:,.2f}".format)
+    buy["Cost"] = buy["Cost"].apply(lambda x: f"${x:,.2f}")
 
     def display_portfolio(portfolio, prices, allocations):
         values = portfolio * prices
@@ -228,10 +244,10 @@ def rebalance(stonkers, account_id, funds, risk):
         percentage_fields = ["Balance", "Allocation", "Drift"]
 
         summary[number_fields] = summary[number_fields].applymap(
-            "{:,.2f}".format
+            lambda x: f"{x:,.2f}"
         )
         summary[percentage_fields] = summary[percentage_fields].applymap(
-            "{:,.2%}".format
+            lambda x: f"{x:,.2%}"
         )
 
         return summary
@@ -242,9 +258,7 @@ def rebalance(stonkers, account_id, funds, risk):
     print()
 
     print(
-        "Buy for a total cost of ${0:,.2f} (${1:,.2f} left)".format(
-            sum(cost), funds - sum(cost)
-        )
+        f"Buy for a total cost of ${sum(cost):,.2f} (${funds - sum(cost):,.2f} left)"
     )
     print(stonkers.format(buy))
     print()
@@ -254,19 +268,18 @@ def rebalance(stonkers, account_id, funds, risk):
     print(stonkers.format(result))
 
 
-@cli.group()
+@cli.group(name="options")
 @click.help_option("-h", "--help")
-def options():
+def options_group():
     """Options Functions."""
-    pass
 
 
-@options.command()
+@options_group.command(name="expiring")
 @click.option("-d", "--dte", default=5, help="Days to expiration.")
 @click.argument("account_id")
 @click.help_option("-h", "--help")
 @click.pass_obj
-def expiring(stonkers, dte, account_id):
+def expiring_options(stonkers, dte, account_id):
     """Find option positions that are expiring within DTE."""
     positions = stonkers.client.positions(account_id)
 
@@ -280,7 +293,7 @@ def expiring(stonkers, dte, account_id):
     expiring = pd.DataFrame(prices[prices["daysToExpiration"] <= dte])
 
     if expiring.empty:
-        print("Nothing expiring in {} days".format(dte))
+        print(f"Nothing expiring in {dte} days")
         return
 
     expiring["quantity"] = options["longQuantity"] - options["shortQuantity"]
@@ -343,7 +356,7 @@ def expiring(stonkers, dte, account_id):
     print(stonkers.format(expiring, index=False))
 
 
-@options.command()
+@options_group.command()
 @click.option("-d", "--dte", default=60, help="Days to expiration.")
 @click.option(
     "-p", "--pop-min", default=70, help="Probability of Profit minimum."
@@ -358,23 +371,25 @@ def expiring(stonkers, dte, account_id):
 @click.argument("tickers", nargs=-1)
 @click.help_option("-h", "--help")
 @click.pass_obj
+# pylint: disable=too-many-arguments
 def puts(stonkers, dte, pop_min, pop_max, return_min, exclude, tickers):
     """Find options that meet an anual rate of return requirement."""
     if not tickers:
         tickers = stonkers.thetagang.trending()
 
     if not tickers:
-        tickers = ("GME",)
+        tickers = ({"symbol": "GME"},)
 
     tickers = [
-        t["symbol"] for t in tickers
+        t["symbol"]
+        for t in tickers
         if t.get("symbol") not in exclude + (None,)
     ]
 
-    puts = commands.put_finder(
+    options = commands.put_finder(
         stonkers.client, tickers, dte, pop_min, pop_max, return_min
     )
-    puts = puts[
+    options = options[
         [
             "symbol",
             "underlying.last",
@@ -388,7 +403,7 @@ def puts(stonkers, dte, pop_min, pop_max, return_min, exclude, tickers):
         ]
     ]
 
-    puts = puts.rename(
+    options = options.rename(
         columns={
             "symbol": "💸",
             "underlying.last": "Underlying",
@@ -402,4 +417,4 @@ def puts(stonkers, dte, pop_min, pop_max, return_min, exclude, tickers):
         }
     )
 
-    print(stonkers.format(puts, index=False))
+    print(stonkers.format(options, index=False))
