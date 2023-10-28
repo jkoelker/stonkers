@@ -71,7 +71,7 @@ class Client(object):
         account = self.account(
             account_id, fields=self.tda.Account.Fields.POSITIONS
         )
-        positions = account["positions"][0]
+        positions = account["positions"].iloc[0]
 
         if dataframe:
             return convert.positions(positions)
