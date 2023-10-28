@@ -37,7 +37,7 @@ def put_finder(client, tickers, dte=60, pop_min=70, pop_max=90, return_min=20):
 
             if underlying:
                 for key, value in underlying.items():
-                    chain["underlying.{}".format(key)] = value
+                    chain[f"underlying.{key}"] = value
 
                 chains.append(chain)
 
