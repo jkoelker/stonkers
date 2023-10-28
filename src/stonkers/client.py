@@ -3,7 +3,7 @@
 from . import convert
 
 
-class Client(object):
+class Client():
     def __init__(self, tda_client):
         self.tda = tda_client
 
