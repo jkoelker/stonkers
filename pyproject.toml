@@ -37,7 +37,7 @@ httpx = "^0.25.0"
 stonkers = "stonkers.cli:cli"
 
 [tool.poetry.group.dev.dependencies]
-pylint = "^3.0.1"
+pylint = "^3.0.2"
 black = "^23.10.0"
 ipython = "^8.5.0"
 datascroller = "^1.4.1"
