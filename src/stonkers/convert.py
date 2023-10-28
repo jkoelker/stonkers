@@ -73,10 +73,10 @@ def positions(data):
     ret = []
 
     for position in data:
-        instrument = position.pop("instrument", {})
+        instrument_position = position.pop("instrument", {})
         for col in ("assetType", "cusip", "symbol"):
-            if col in instrument:
-                position[col] = instrument[col]
+            if col in instrument_position:
+                position[col] = instrument_position[col]
 
         ret.append(position)
 
