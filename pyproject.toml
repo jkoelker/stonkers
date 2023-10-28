@@ -45,3 +45,10 @@ datascroller = "^1.4.1"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "Poetry.core.masonry.api"
+
+[tool.pylint."messages control"]
+disable = [
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+]
