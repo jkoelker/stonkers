@@ -3,7 +3,9 @@
 Stonkers CLI.
 """
 
+import asyncio
 import functools
+import inspect
 import json
 import os
 import urllib.parse
@@ -23,6 +25,14 @@ REDIRECT_URI = "redirect_uri"
 OUTPUT_JSON = "json"
 OUTPUT_YAML = "yaml"
 OUTPUT_CONSOLE = "console"
+
+
+def make_sync(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return asyncio.run(func(*args, **kwargs))
+
+    return wrapper
 
 
 class ThetaGang:  # pylint:disable=too-few-public-methods
@@ -67,7 +77,10 @@ class Stonkers:
             config = yaml.safe_load(file)
             return client.Client(
                 auth.get_client(
-                    config[API_KEY], config[REDIRECT_URI], self.token_file
+                    config[API_KEY],
+                    config[REDIRECT_URI],
+                    self.token_file,
+                    asyncio=True,
                 )
             )
 
@@ -95,6 +108,19 @@ class Stonkers:
 
 
 click.option = functools.partial(click.option, show_default=True)
+
+
+class AsyncContext(click.Context):
+    def invoke(self, *args, **kwargs):  # pylint: disable=arguments-differ
+        r = super().invoke(*args, **kwargs)
+
+        if inspect.isawaitable(r):
+            return asyncio.run(r)
+
+        return r
+
+
+click.Command.context_class = AsyncContext
 
 
 @click.group()
@@ -168,9 +194,9 @@ def account():
 @account.command(name="list")
 @click.help_option("-h", "--help")
 @click.pass_obj
-def list_accounts(stonkers):
+async def list_accounts(stonkers):
     """List account IDs."""
-    accounts = stonkers.client.accounts()
+    accounts = await stonkers.client.accounts()
     accounts = accounts[["displayName", "currentBalances.moneyMarketFund"]]
 
     accounts = accounts.rename(
@@ -189,7 +215,7 @@ def list_accounts(stonkers):
 @click.argument("funds", type=float)
 @click.option("--risk", "-r", default=90)
 @click.pass_obj
-def rebalance(stonkers, account_id, funds, risk):
+async def rebalance(stonkers, account_id, funds, risk):
     """Rebalance."""
     # TODO(jkoelker) make this configurable
     # 90% stock 10% bonds portfolio
@@ -207,13 +233,11 @@ def rebalance(stonkers, account_id, funds, risk):
         }
     )
 
-    positions = stonkers.client.positions(account_id)
+    positions = await stonkers.client.positions(account_id)
     portfolio = positions["longQuantity"].reindex(allocations.keys()).fillna(0)
-    prices = stonkers.client.quote(portfolio.keys())["askPrice"]
+    prices = (await stonkers.client.quote(portfolio.keys()))["askPrice"]
 
-    shares = commands.rebalance(
-        stonkers.client, allocations, funds, portfolio, prices
-    )
+    shares = commands.rebalance(allocations, funds, portfolio, prices)
 
     cost = shares * prices
     buy = pd.DataFrame({"Shares": shares, "Cost": cost})
@@ -245,10 +269,10 @@ def rebalance(stonkers, account_id, funds, risk):
         number_fields = ["Shares", "Value", "Price"]
         percentage_fields = ["Balance", "Allocation", "Drift"]
 
-        summary[number_fields] = summary[number_fields].applymap(
+        summary[number_fields] = summary[number_fields].map(
             lambda x: f"{x:,.2f}"
         )
-        summary[percentage_fields] = summary[percentage_fields].applymap(
+        summary[percentage_fields] = summary[percentage_fields].map(
             lambda x: f"{x:,.2%}"
         )
 
@@ -281,15 +305,15 @@ def options_group():
 @click.argument("account_id")
 @click.help_option("-h", "--help")
 @click.pass_obj
-def expiring_options(stonkers, dte, account_id):
+async def expiring_options(stonkers, dte, account_id):
     """Find option positions that are expiring within DTE."""
-    positions = stonkers.client.positions(account_id)
+    positions = await stonkers.client.positions(account_id)
 
     options = positions[
         positions["assetType"] == stonkers.client.tda.Markets.OPTION.value
     ]
 
-    prices = stonkers.client.quote(options.index)
+    prices = await stonkers.client.quote(options.index)
 
     # NOTE(jkoelker) Make a new DataFrame so it is is not a view
     expiring = pd.DataFrame(prices[prices["daysToExpiration"] <= dte])
@@ -374,7 +398,7 @@ def expiring_options(stonkers, dte, account_id):
 @click.help_option("-h", "--help")
 @click.pass_obj
 # pylint: disable=too-many-arguments
-def puts(stonkers, dte, pop_min, pop_max, return_min, exclude, tickers):
+async def puts(stonkers, dte, pop_min, pop_max, return_min, exclude, tickers):
     """Find options that meet an anual rate of return requirement."""
     if not tickers:
         tickers = stonkers.thetagang.trending()
@@ -388,7 +412,7 @@ def puts(stonkers, dte, pop_min, pop_max, return_min, exclude, tickers):
         if t.get("symbol") not in exclude + (None,)
     ]
 
-    options = commands.put_finder(
+    options = await commands.put_finder(
         stonkers.client, tickers, dte, pop_min, pop_max, return_min
     )
     options = options[

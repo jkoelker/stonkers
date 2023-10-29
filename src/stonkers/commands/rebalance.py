@@ -4,7 +4,7 @@ import numpy as np
 from scipy import optimize as opt
 
 
-def rebalance(client, allocations, funds, portfolio, prices):
+def rebalance(allocations, funds, portfolio, prices):
     values = portfolio * prices
 
     shares = allocations * funds / prices
@@ -17,7 +17,7 @@ def rebalance(client, allocations, funds, portfolio, prices):
             values = portfolio.add(s, fill_value=0) * prices
             balance = values / sum(values)
 
-            if any([b < 0 for b in balance[s > 0]]):
+            if any(b < 0 for b in balance[s > 0]):
                 return 1
 
             return sum(allocations - balance)
