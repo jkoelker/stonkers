@@ -4,7 +4,7 @@ import asyncio
 from typing import Callable, Iterable, List, Optional
 
 import pandas as pd
-import tda
+import tda  # type: ignore
 
 from ..client import Client
 
@@ -130,7 +130,9 @@ def default_conditions() -> List[Callable[[pd.DataFrame], pd.Series]]:
 
 def evaluate_options(
     options_df: pd.DataFrame,
-    filter_conditions: Iterable[Callable[[pd.DataFrame], pd.Series]] = None,
+    filter_conditions: Optional[
+        Iterable[Callable[[pd.DataFrame], pd.Series]]
+    ] = None,
 ) -> pd.DataFrame:
     """Evaluate options using the provided pandas DataFrame keys."""
 
@@ -153,7 +155,9 @@ def evaluate_options(
 
 def best_option(
     options_df: pd.DataFrame,
-    filter_conditions: Iterable[Callable[[pd.DataFrame], pd.Series]] = None,
+    filter_conditions: Optional[
+        Iterable[Callable[[pd.DataFrame], pd.Series]]
+    ] = None,
 ) -> Optional[pd.Series]:
     """Retrieve the best option based on the evaluation criteria."""
     evaluated_df = evaluate_options(
