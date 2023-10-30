@@ -444,3 +444,15 @@ async def puts(stonkers, dte, pop_min, pop_max, return_min, exclude, tickers):
     )
 
     print(stonkers.format(options, index=False))
+
+
+@options_group.command()
+@click.argument("account_id")
+@click.argument("tickers", nargs=-1)
+@click.help_option("-h", "--help")
+@click.pass_obj
+# pylint: disable=too-many-arguments
+async def wheelie(stonkers, account_id, tickers):
+    """Run the wheel strategy on the tickers"""
+
+    await commands.wheelie(stonkers.client, account_id, tickers)
