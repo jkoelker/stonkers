@@ -14,14 +14,16 @@ def get_returns(bid, strike_price, dte):
     return (round(put_return, 1), round(annual_return, 1))
 
 
-def put_finder(client, tickers, dte=60, pop_min=70, pop_max=90, return_min=20):
+async def put_finder(
+    client, tickers, dte=60, pop_min=70, pop_max=90, return_min=20
+):
     # Set the max DTE for options chains.
     max_exp = dt.datetime.now() + dt.timedelta(days=dte)
 
     # Get the options chain as a pandas dataframe. (Thanks dobby. 🤗)
     chains = []
     for ticker in tickers:
-        chain = client.options(
+        chain = await client.options(
             ticker,
             contract_type=client.tda.Options.ContractType.PUT,
             include_quotes=True,
@@ -37,7 +39,7 @@ def put_finder(client, tickers, dte=60, pop_min=70, pop_max=90, return_min=20):
 
             if underlying:
                 for key, value in underlying.items():
-                    chain["underlying.{}".format(key)] = value
+                    chain[f"underlying.{key}"] = value
 
                 chains.append(chain)
 
