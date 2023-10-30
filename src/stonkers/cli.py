@@ -70,6 +70,18 @@ class Stonkers:
         """ThetaGang API."""
         return ThetaGang()
 
+    def default_tickers(self, exclude):
+        tickers = self.thetagang.trending()
+
+        if not tickers:
+            tickers = ({"symbol": "GME"},)
+
+        return [
+            t["symbol"]
+            for t in tickers
+            if t.get("symbol") not in exclude + (None,)
+        ]
+
     @functools.cached_property
     def client(self):
         """TD Ameritrade Client."""
@@ -401,16 +413,7 @@ async def expiring_options(stonkers, dte, account_id):
 async def puts(stonkers, dte, pop_min, pop_max, return_min, exclude, tickers):
     """Find options that meet an anual rate of return requirement."""
     if not tickers:
-        tickers = stonkers.thetagang.trending()
-
-    if not tickers:
-        tickers = ({"symbol": "GME"},)
-
-    tickers = [
-        t["symbol"]
-        for t in tickers
-        if t.get("symbol") not in exclude + (None,)
-    ]
+        tickers = stonkers.default_tickers(exclude)
 
     options = await commands.put_finder(
         stonkers.client, tickers, dte, pop_min, pop_max, return_min
@@ -447,12 +450,17 @@ async def puts(stonkers, dte, pop_min, pop_max, return_min, exclude, tickers):
 
 
 @options_group.command()
+@click.option(
+    "-e", "--exclude", multiple=True, help="Exclude a ticker explicitly."
+)
 @click.argument("account_id")
 @click.argument("tickers", nargs=-1)
 @click.help_option("-h", "--help")
 @click.pass_obj
 # pylint: disable=too-many-arguments
-async def wheelie(stonkers, account_id, tickers):
+async def wheelie(stonkers, exclude, account_id, tickers):
     """Run the wheel strategy on the tickers"""
+    if not tickers:
+        tickers = stonkers.default_tickers(exclude)
 
     await commands.wheelie(stonkers.client, account_id, tickers)
