@@ -41,7 +41,7 @@ pylint = "^3.0.2"
 black = "^23.10.1"
 ipython = "^8.5.0"
 datascroller = "^1.4.1"
-mypy = "^1.6.1"
+mypy = "^1.7.1"
 types-pyyaml = "^6.0.12.12"
 pandas-stubs = "^2.1.1.230928"
 
