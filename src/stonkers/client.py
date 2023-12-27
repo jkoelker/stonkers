@@ -1,6 +1,6 @@
 #
 
-import tda.client
+import tda.client  # type: ignore
 
 from . import convert
 

@@ -119,9 +119,6 @@ class Stonkers:
         return yaml.dump(data)
 
 
-click.option = functools.partial(click.option, show_default=True)
-
-
 class AsyncContext(click.Context):
     def invoke(self, *args, **kwargs):  # pylint: disable=arguments-differ
         r = super().invoke(*args, **kwargs)
@@ -141,6 +138,7 @@ click.Command.context_class = AsyncContext
     "--creds-file",
     envvar="CREDS_FILE",
     type=click.Path(allow_dash=True),
+    show_default=True,
     help="Credentials yaml file containing `api_key` and `redirect_uri`.",
     default=os.path.join(click.get_app_dir(APP_NAME), "creds.yaml"),
 )
@@ -150,6 +148,7 @@ click.Command.context_class = AsyncContext
     type=click.Choice(
         [OUTPUT_JSON, OUTPUT_YAML, OUTPUT_CONSOLE], case_sensitive=False
     ),
+    show_default=True,
     help="Output format",
     default=OUTPUT_CONSOLE,
 )
@@ -158,6 +157,7 @@ click.Command.context_class = AsyncContext
     "--token-file",
     envvar="TOKEN_FILE",
     type=click.Path(),
+    show_default=True,
     help="Token file for TD Ameritrade OAuth.",
     default=os.path.join(click.get_app_dir(APP_NAME), "token.json"),
 )
@@ -177,8 +177,15 @@ def cli(ctx, creds_file, output, token_file):
     hide_input=True,
     confirmation_prompt=True,
     envvar="API_KEY",
+    show_default=True,
 )
-@click.option("-r", "--redirect-uri", prompt=True, envvar="REDIRECT_URI")
+@click.option(
+    "-r",
+    "--redirect-uri",
+    prompt=True,
+    envvar="REDIRECT_URI",
+    show_default=True,
+)
 @click.help_option("-h", "--help")
 @click.pass_obj
 def setup(stonkers, api_key, redirect_uri):
@@ -225,7 +232,12 @@ async def list_accounts(stonkers):
 @click.help_option("-h", "--help")
 @click.argument("account_id")
 @click.argument("funds", type=float)
-@click.option("--risk", "-r", default=90)
+@click.option(
+    "--risk",
+    "-r",
+    default=90,
+    show_default=True,
+)
 @click.pass_obj
 async def rebalance(stonkers, account_id, funds, risk):
     """Rebalance."""
@@ -313,7 +325,13 @@ def options_group():
 
 
 @options_group.command(name="expiring")
-@click.option("-d", "--dte", default=5, help="Days to expiration.")
+@click.option(
+    "-d",
+    "--dte",
+    default=5,
+    show_default=True,
+    help="Days to expiration.",
+)
 @click.argument("account_id")
 @click.help_option("-h", "--help")
 @click.pass_obj
@@ -395,16 +413,40 @@ async def expiring_options(stonkers, dte, account_id):
 
 
 @options_group.command()
-@click.option("-d", "--dte", default=60, help="Days to expiration.")
 @click.option(
-    "-p", "--pop-min", default=70, help="Probability of Profit minimum."
+    "-d",
+    "--dte",
+    default=60,
+    show_default=True,
+    help="Days to expiration.",
 )
 @click.option(
-    "-P", "--pop-max", default=90, help="Probability of Profit maximum."
+    "-p",
+    "--pop-min",
+    default=70,
+    show_default=True,
+    help="Probability of Profit minimum.",
 )
-@click.option("-r", "--return-min", default=20, help="Retun minimum value.")
 @click.option(
-    "-e", "--exclude", multiple=True, help="Exclude a ticker explicitly."
+    "-P",
+    "--pop-max",
+    default=90,
+    show_default=True,
+    help="Probability of Profit maximum.",
+)
+@click.option(
+    "-r",
+    "--return-min",
+    default=20,
+    show_default=True,
+    help="Retun minimum value.",
+)
+@click.option(
+    "-e",
+    "--exclude",
+    multiple=True,
+    show_default=True,
+    help="Exclude a ticker explicitly.",
 )
 @click.argument("tickers", nargs=-1)
 @click.help_option("-h", "--help")
@@ -451,7 +493,11 @@ async def puts(stonkers, dte, pop_min, pop_max, return_min, exclude, tickers):
 
 @options_group.command()
 @click.option(
-    "-e", "--exclude", multiple=True, help="Exclude a ticker explicitly."
+    "-e",
+    "--exclude",
+    multiple=True,
+    show_default=True,
+    help="Exclude a ticker explicitly.",
 )
 @click.argument("account_id")
 @click.argument("tickers", nargs=-1)

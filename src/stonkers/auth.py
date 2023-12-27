@@ -3,7 +3,7 @@
 import logging
 import os
 
-from tda import auth
+from tda import auth  # type: ignore
 
 LOG = logging.getLogger(__name__)
 
