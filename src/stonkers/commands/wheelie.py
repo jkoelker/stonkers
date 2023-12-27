@@ -4,6 +4,10 @@ import asyncio
 from typing import Callable, Iterable, List, Optional
 
 import pandas as pd
+import rich
+import rich.console
+import rich.live
+import rich.table
 import tda  # type: ignore
 
 from ..client import Client
@@ -166,7 +170,7 @@ def best_option(
     return evaluated_df.iloc[0] if not evaluated_df.empty else None
 
 
-async def wheel(client: Client, positions: pd.DataFrame, ticker: str):
+async def wheel(client: Client, positions: pd.DataFrame, ticker: str) -> str:
     # Helper function to check for existing short options
     def has_short_option(
         option_type: tda.client.Client.Options.ContractType,
@@ -180,8 +184,7 @@ async def wheel(client: Client, positions: pd.DataFrame, ticker: str):
 
     # 1. Check if you have a short PUT for the ticker.
     if has_short_option(tda.client.Client.Options.ContractType.PUT):
-        print(f"Already have a short PUT for {ticker}.")
-        return
+        return f"Already have a short PUT for {ticker}."
 
     contract_type = tda.client.Client.Options.ContractType.PUT
 
@@ -189,14 +192,9 @@ async def wheel(client: Client, positions: pd.DataFrame, ticker: str):
     if ticker in positions.index:
         # Check if we have already sold covered calls
         if has_short_option(tda.client.Client.Options.ContractType.CALL):
-            print(f"Already have covered calls for {ticker}")
-            return
+            return f"Already have covered calls for {ticker}"
 
         # 3. Sell covered calls.
-        print(
-            f"Have the underlying stock for {ticker}. Selling covered calls."
-        )
-
         contract_type = tda.client.Client.Options.ContractType.CALL
 
     # Fetch the options chain
@@ -215,8 +213,7 @@ async def wheel(client: Client, positions: pd.DataFrame, ticker: str):
     option = best_option(chain, filter_conditions=filter_conditions)
 
     if option is None or option.empty:
-        print(f"No options found for {ticker}.")
-        return
+        return f"No options found for {ticker}."
 
     num_contracts = 1
     if contract_type == tda.client.Client.Options.ContractType.CALL:
@@ -224,13 +221,28 @@ async def wheel(client: Client, positions: pd.DataFrame, ticker: str):
             positions.loc[ticker, "longQuantity"] / option["multiplier"]
         )
 
-    print(
-        f"Selling {num_contracts} contracts of "
-        f"{option['symbol']} for {option['mark']} "
+    return (
+        f"Sell {num_contracts} x "
+        f"{option['description']} for {option['mark']} "
         "for a total of "
         f"${num_contracts * option['mark'] * option['multiplier']:.2f}. "
         f"with a RoR of {option['RoR']:.2%}."
     )
+
+
+class Ticker:
+    def __init__(self, ticker: str, update: Callable[[], None]):
+        self.ticker = ticker
+        self.status = "Pending"
+        self._update = update
+
+    def __rich__(self):
+        return self.status
+
+    async def wheel(self, client: Client, positions: pd.DataFrame):
+        result = await wheel(client, positions, self.ticker)
+        self.status = result
+        self._update()
 
 
 async def wheelie(
@@ -238,7 +250,24 @@ async def wheelie(
     account_id: str,
     tickers: Iterable[str],
 ):
-    positions = await client.positions(account_id)
+    console = rich.console.Console()
 
-    tasks = [wheel(client, positions, ticker) for ticker in tickers]
-    return await asyncio.gather(*tasks)
+    with console.status("[bold green]Fetching positions..."):
+        positions = await client.positions(account_id)
+
+    with rich.live.Live(console=console, auto_refresh=False) as live:
+        table = rich.table.Table()
+
+        table.add_column("Ticker", justify="left", style="cyan")
+        table.add_column("Status", justify="left", style="green")
+
+        def update():
+            live.update(table)
+
+        rich_tickers = [Ticker(ticker, update) for ticker in tickers]
+
+        for ticker in rich_tickers:
+            table.add_row(ticker.ticker, ticker)
+
+        tasks = [ticker.wheel(client, positions) for ticker in rich_tickers]
+        await asyncio.gather(*tasks)
