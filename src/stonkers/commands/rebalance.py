@@ -1,7 +1,7 @@
 #
 
 import numpy as np
-from scipy import optimize as opt
+from scipy import optimize as opt  # type: ignore
 
 
 def rebalance(allocations, funds, portfolio, prices):
