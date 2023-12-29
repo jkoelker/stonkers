@@ -16,6 +16,7 @@ def parse_ticker(ticker: str) -> Optional[dict]:
         return {
             "asset_type": "EQUITY",
             "symbol": ticker,
+            "underlying": ticker,
         }
 
     # Split the ticker on "_"
@@ -126,6 +127,14 @@ def positions(data):
                 position[col] = instrument_position[col]
 
         position.update(parse_ticker(position["symbol"]))
+
+        if "expiration" in position:
+            position["expiration_date"] = pd.to_datetime(
+                position["expiration"], format="%m%d%y"
+            )
+
+        if "strike" in position:
+            position["strike"] = pd.to_numeric(position["strike"])
 
         ret.append(position)
 

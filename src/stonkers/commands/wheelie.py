@@ -176,14 +176,26 @@ def best_option(
 
 
 async def wheel(client: Client, positions: pd.DataFrame, ticker: str) -> str:
+    options = positions[positions["assetType"] == "OPTION"]
+    equities = positions[positions["assetType"] == "EQUITY"]
+
     # Helper function to check for existing short options
     def has_short_option(
         option_type: tda.client.Client.Options.ContractType,
     ) -> bool:
-        relevant_option = positions[
-            (positions.index.str.contains(f"{ticker}_"))
-            & (positions.index.str[10] == option_type.value[0])
-            & (positions["shortQuantity"] > 0)
+        # Filter the DataFrame for the specific ticker
+        filtered = options.loc[
+            options.index.get_level_values("underlying") == ticker
+        ]
+
+        # Apply the conditions on the filtered DataFrame
+        relevant_option = filtered[
+            (filtered.index.get_level_values(1).str.contains(f"{ticker}_"))
+            & (
+                filtered.index.get_level_values(1).str[10]
+                == option_type.value[0]
+            )
+            & (filtered["shortQuantity"] > 0)
         ]
         return not relevant_option.empty
 
@@ -194,7 +206,7 @@ async def wheel(client: Client, positions: pd.DataFrame, ticker: str) -> str:
     contract_type = tda.client.Client.Options.ContractType.PUT
 
     # 2. Check if you have the underlying stock.
-    if ticker in positions.index:
+    if ticker in equities.index.get_level_values("underlying"):
         # Check if we have already sold covered calls
         if has_short_option(tda.client.Client.Options.ContractType.CALL):
             return f"Already have covered calls for {ticker}"
@@ -222,9 +234,13 @@ async def wheel(client: Client, positions: pd.DataFrame, ticker: str) -> str:
 
     num_contracts = 1
     if contract_type == tda.client.Client.Options.ContractType.CALL:
-        num_contracts = int(
-            positions.loc[ticker, "longQuantity"] / option["multiplier"]
-        )
+        long_quantity = 0
+
+        if (ticker, ticker) in equities.index:
+            value = positions.loc[(ticker, ticker), "longQuantity"]
+            long_quantity = int(pd.to_numeric(value, errors="coerce"))
+
+        num_contracts = int(long_quantity / option["multiplier"])
 
     return (
         f"Sell {num_contracts} x "
@@ -246,7 +262,18 @@ def number(
     bolded = "bold " if bold else ""
 
     def fmt(value: float, pre: str = "", post: str = "") -> str:
-        return f"[{bolded}{color}]{pre}{value:,.{precision}f}{post}[/{bolded}{color}]"
+        value_str = f"{value:,.{precision}f}"
+
+        if precision > 2:
+            # NOTE(jkoelker) Remove all trailing zeros.
+            value_str = value_str.rstrip("0")
+
+            # NOTE(jkoelker) If the last character is a decimal point,
+            # pad up to 2 decimal places with zeros.
+            while len(value_str.split(".")[-1]) < 2:
+                value_str += "0"
+
+        return f"[{bolded}{color}]{pre}{value_str}{post}[/{bolded}{color}]"
 
     if percent:
         value *= 100
@@ -406,6 +433,156 @@ class Ticker:
         self._update()
 
 
+@dataclasses.dataclass
+class Positions:
+    update: Optional[Callable[[], None]] = None
+    _positions: Optional[pd.DataFrame] = None
+    _quotes: Optional[pd.DataFrame] = None
+    _loading = rich.spinner.Spinner("dots", "Loading positions...")
+
+    def __rich__(self):
+        def panel(renderable: rich.console.RenderableType) -> rich.panel.Panel:
+            return rich.panel.Panel(
+                renderable,
+                title="Positions",
+            )
+
+        if self._positions is None or self._quotes is None:
+            return panel(rich.align.Align.center(self._loading))
+
+        table = rich.table.Table(
+            expand=True,
+        )
+
+        table.add_column("Symbol")
+        table.add_column("R")
+        table.add_column("Qty", justify="right")
+        table.add_column("MktPrice", justify="right")
+        table.add_column("AvgPrice", justify="right")
+        table.add_column("Value", justify="right")
+        table.add_column("Cost", justify="right")
+        table.add_column("Unrealized P&L", justify="right")
+        table.add_column("P&L", justify="right")
+        table.add_column("Strike", justify="right")
+        table.add_column("Exp", justify="right")
+        table.add_column("DTE", justify="right")
+        table.add_column("ITM?")
+
+        def cost_basis(row: pd.Series) -> float:
+            quantity = row["longQuantity"] - row["shortQuantity"]
+            value = row["averagePrice"] * quantity
+
+            if row["assetType"] == "OPTION":
+                value = value * 100
+
+            return value
+
+        def is_in_the_money(mark: float, row: pd.Series) -> bool:
+            if row["assetType"] != "OPTION":
+                return False
+
+            if row["contract_type"] == "CALL":
+                return row["strike"] > mark
+
+            return row["strike"] < mark
+
+        for ticker in self.positions.index.get_level_values(
+            "underlying"
+        ).unique():
+            positions = self.positions.loc[ticker]
+
+            table.add_row(ticker)
+
+            for symbol, pos in positions.iterrows():
+                right = (
+                    "S"
+                    if pos["assetType"] == "EQUITY"
+                    else pos["contract_type"][0]
+                )
+                mark = self.quotes.loc[symbol]["mark"]
+                cost = cost_basis(pos)
+                profit = pos["marketValue"] - cost
+                profit_percent = profit / abs(cost)
+
+                row = (
+                    "",
+                    right,
+                    number(
+                        pos["longQuantity"] - pos["shortQuantity"], precision=0
+                    ),
+                    number(mark, currency="$", precision=5),
+                    number(pos["averagePrice"], currency="$", precision=5),
+                    number(pos["marketValue"], currency="$", precision=5),
+                    number(cost, currency="$", precision=5),
+                    number(profit, currency="$", precision=5),
+                    number(profit_percent, percent=True, precision=2),
+                )
+
+                if pos["assetType"] == "OPTION":
+                    dte = pos["expiration_date"] - pd.Timestamp.now()
+                    row += (
+                        number(pos["strike"], currency="$", precision=5),
+                        pos["expiration_date"].strftime("%Y-%m-%d"),
+                        number(dte.days, precision=0),
+                        ":heavy_check_mark:"
+                        if is_in_the_money(mark, pos)
+                        else "",
+                    )
+
+                table.add_row(*row)
+
+            table.add_section()
+
+        return panel(table)
+
+    def _update(self):
+        if self.update is not None:
+            self.update()
+
+    @property
+    def equities(self) -> pd.DataFrame:
+        return self.positions[self.positions["assetType"] == "EQUITY"]
+
+    @property
+    def options(self) -> pd.DataFrame:
+        return self.positions[self.positions["assetType"] == "OPTION"]
+
+    @property
+    def positions(self) -> pd.DataFrame:
+        if self._positions is None:
+            raise RuntimeError("Positions have not been fetched yet.")
+
+        return self._positions
+
+    @property
+    def quotes(self) -> pd.DataFrame:
+        if self._quotes is None:
+            raise RuntimeError("Quotes have not been fetched yet.")
+
+        return self._quotes
+
+    async def __call__(self, client: Client, account_id: str):
+        positions = await client.positions(account_id)
+        positions.set_index(["underlying", positions.index], inplace=True)
+
+        # sort by underlying, then by expiration_date
+        positions.sort_values(
+            ["underlying", "contract_type", "expiration_date"],
+            inplace=True,
+            na_position="first",
+        )
+
+        self._positions = positions
+
+        symbols = positions.index.get_level_values("symbol").tolist()
+        underlying = positions.index.get_level_values("underlying").tolist()
+        tickers = set(symbols + underlying)
+
+        self._quotes = await client.quote(tickers)
+
+        self._update()
+
+
 async def wheelie(
     client: Client,
     account_id: str,
@@ -421,7 +598,10 @@ async def wheelie(
         )
         await account()
 
-    positions = await client.positions(account_id)
+    with rich.live.Live(console=console) as live:
+        positions = Positions(lambda: live.update(positions))
+        await positions(client, account_id)
+        live.update(positions)
 
     with rich.live.Live(console=console, auto_refresh=False) as live:
         table = rich.table.Table()
@@ -437,5 +617,7 @@ async def wheelie(
         for ticker in rich_tickers:
             table.add_row(ticker.ticker, ticker)
 
-        tasks = [ticker(client, positions) for ticker in rich_tickers]
+        tasks = [
+            ticker(client, positions.positions) for ticker in rich_tickers
+        ]
         await asyncio.gather(*tasks)
