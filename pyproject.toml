@@ -38,7 +38,7 @@ rich = "^13.7.0"
 stonkers = "stonkers.cli:cli"
 
 [tool.poetry.group.dev.dependencies]
-pylint = "^3.0.2"
+pylint = "^3.0.3"
 black = "^23.12.1"
 ipython = "^8.19.0"
 datascroller = "^1.4.1"
