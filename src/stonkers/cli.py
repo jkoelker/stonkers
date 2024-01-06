@@ -491,22 +491,50 @@ async def puts(stonkers, dte, pop_min, pop_max, return_min, exclude, tickers):
     print(stonkers.format(options, index=False))
 
 
+def _combine_docstrings(*other_funcs):
+    """Combine docstrings from other functions onto the decorated function."""
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+
+        wrapper.__doc__ = (wrapper.__doc__ or "").strip("\n")
+
+        for other_func in other_funcs:
+            doc = (other_func.__doc__ or "").strip("\n")
+            if doc:
+                wrapper.__doc__ += "\n" + doc
+
+        return wrapper
+
+    return decorator
+
+
 @options_group.command()
-@click.option(
-    "-e",
-    "--exclude",
-    multiple=True,
-    show_default=True,
-    help="Exclude a ticker explicitly.",
-)
+@click.option("-a", "--auto-send", is_flag=True, help="Auto send orders.")
 @click.argument("account_id")
 @click.argument("tickers", nargs=-1)
 @click.help_option("-h", "--help")
 @click.pass_obj
-# pylint: disable=too-many-arguments
-async def wheelie(stonkers, exclude, account_id, tickers):
-    """Run the wheel strategy on the tickers"""
-    if not tickers:
-        tickers = stonkers.default_tickers(exclude)
+@_combine_docstrings(commands.WheelConfig)
+async def wheelie(stonkers, auto_send, account_id, tickers):
+    # NOTE the docstring from commands.wheelie is appended to this one
+    """
+    Run the wheel strategy on the tickers
 
-    await commands.wheelie(stonkers.client, account_id, tickers)
+    \b
+    ACCOUNT_ID: Account ID to use
+    TICKERS: Tickers to run the wheel on
+
+    Tickers can be specified as a string value like `NVDA` or as a string
+    value with configuration options seprarated by a colon like
+    `NVDA:weight=0.1:sigma=0.2`. The following options are available:
+    """
+
+    await commands.wheelie(
+        stonkers.client,
+        account_id,
+        [commands.WheelConfig.parse(ticker) for ticker in tickers],
+        auto_send_orders=auto_send,
+    )

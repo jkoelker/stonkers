@@ -116,6 +116,19 @@ def options(data):
     return df
 
 
+def orders(data):
+    """orders as dataframe"""
+
+    for order in data:
+        for col in "enteredTime", "closeTime":
+            if col in order:
+                order[col] = pd.to_datetime(
+                    order[col], format="%Y-%m-%dT%H:%M:%S%z"
+                )
+
+    return pd.DataFrame(data)
+
+
 def positions(data):
     """positions list as a dataframe"""
     ret = []
@@ -143,3 +156,15 @@ def positions(data):
 
 def user_principals(data):
     return pd.json_normalize(data)
+
+
+def price_history(data):
+    """get price history as dataframe"""
+    df = pd.DataFrame(data["candles"])
+
+    df["symbol"] = data["symbol"]
+    df["datetime"] = pd.to_datetime(df["datetime"], unit="ms")
+
+    df.set_index("datetime", inplace=True)
+
+    return df
