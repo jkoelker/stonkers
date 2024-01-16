@@ -1,13 +1,37 @@
 #
 
+import asyncio
+import dataclasses
+import datetime
+
+import async_lru as alru
+import cachetools
 import tda.client  # type: ignore
 
 from . import convert
+from .orders import OrderBuilder
+
+
+@dataclasses.dataclass
+class Cache:
+    orders: cachetools.TTLCache
+    options: cachetools.TTLCache
+    quotes: cachetools.TTLCache
 
 
 class Client:
+    _cache: Cache
+
+    OrderBuilder = OrderBuilder
+
     def __init__(self, tda_client: tda.client.AsyncClient):
         self.tda = tda_client
+
+        self._cache = Cache(
+            orders=cachetools.TTLCache(maxsize=1000, ttl=10),
+            options=cachetools.TTLCache(maxsize=1000, ttl=10),
+            quotes=cachetools.TTLCache(maxsize=1000, ttl=10),
+        )
 
     @staticmethod
     def _accounts(accounts, dataframe=True, principals=None):
@@ -53,6 +77,29 @@ class Client:
             accounts, dataframe=dataframe, principals=principals
         )
 
+    @alru.alru_cache
+    async def is_equities_open_on(self, date=None) -> bool:
+        if date is None:
+            date = datetime.date.today()
+
+        result = (
+            await self.tda.get_hours_for_multiple_markets(
+                markets=self.tda.Markets.EQUITY, date=date
+            )
+        ).json()
+
+        for key in result:
+            for subkey in result.get(key, {}):
+                if result[key][subkey].get("marketType") == "EQUITY":
+                    return result[key][subkey].get("isOpen", False)
+
+        return False
+
+    @property
+    @alru.alru_cache
+    async def is_equities_open(self) -> bool:
+        return await self.is_equities_open_on()
+
     def account(self, account_id, fields=None, dataframe=True, augment=True):
         return self._get_accounts(account_id, fields, dataframe, augment)
 
@@ -60,32 +107,81 @@ class Client:
         return self._get_accounts(None, fields, dataframe, augment)
 
     async def options(self, symbol, dataframe=True, **kwargs):
-        options = (await self.tda.get_option_chain(symbol, **kwargs)).json()
+        if symbol not in self._cache.options:
+            self._cache.options[symbol] = (
+                await self.tda.get_option_chain(symbol, **kwargs)
+            ).json()
+
+        options = self._cache.options[symbol]
 
         if dataframe:
             return convert.options(options)
 
         return options
 
+    async def _quote(self, symbols):
+        response = await self.tda.get_quotes(symbols)
+        response.raise_for_status()
+
+        quotes = response.json()
+
+        self._cache.quotes.update(quotes)
+
+        return quotes
+
     async def quote(self, symbols, dataframe=True):
-        quotes = (await self.tda.get_quotes(symbols)).json()
+        if isinstance(symbols, str):
+            symbols = [symbols]
+
+        symbols = set(symbols)
+
+        quotes = {}
+
+        for symbol in set(symbols):
+            if symbol in self._cache.quotes:
+                quotes[symbol] = self._cache.quotes[symbol]
+                symbols.remove(symbol)
+
+        if symbols:
+            quotes.update(await self._quote(symbols))
 
         if dataframe:
             return convert.quote(quotes)
 
         return quotes
 
+    def order_builder(self):
+        return self.OrderBuilder()
+
+    async def orders(self, account_id, dataframe=True):
+        if account_id not in self._cache.orders:
+            account = await self.account(
+                account_id,
+                fields=self.tda.Account.Fields.ORDERS,
+            )
+
+            self._cache.orders[account_id] = account["orderStrategies"].iloc[0]
+
+        data = self._cache.orders[account_id]
+
+        if dataframe:
+            return convert.orders(data)
+
+        return data
+
     async def positions(self, account_id, dataframe=True):
         account = await self.account(
             account_id,
             fields=self.tda.Account.Fields.POSITIONS,
         )
-        positions = account["positions"].iloc[0]
+
+        if "positions" not in account:
+            return None
 
         if dataframe:
-            return convert.positions(positions)
+            return convert.positions(account["positions"].iloc[0])
 
-        return positions
+        return account["positions"].iloc[0]
 
     async def user_principals(self, dataframe=True):
         principals = (await self.tda.get_user_principals()).json()
@@ -94,3 +190,51 @@ class Client:
             return convert.user_principals(principals)
 
         return principals
+
+    async def get_price_history_every_day(
+        self,
+        symbol,
+        start_datetime=None,
+        end_datetime=None,
+        need_extended_hours_data=None,
+        dataframe=True,
+    ):
+        price_history = (
+            await self.tda.get_price_history_every_day(
+                symbol,
+                end_datetime=end_datetime,
+                start_datetime=start_datetime,
+                need_extended_hours_data=need_extended_hours_data,
+            )
+        ).json()
+
+        if dataframe:
+            return convert.price_history(price_history)
+
+        return price_history
+
+    async def cancel_order(self, account_id, order_id):
+        if isinstance(order_id, str):
+            order_id = [order_id]
+
+        if account_id in self._cache.orders:
+            del self._cache.orders[account_id]
+
+        for order in order_id:
+            await self.tda.cancel_order(account_id, order)
+
+    async def place_order(self, account_id, order):
+        if isinstance(order, (dict, OrderBuilder)):
+            order = [order]
+
+        if account_id in self._cache.orders:
+            del self._cache.orders[account_id]
+
+        tasks = []
+        for _order in order:
+            if isinstance(_order, OrderBuilder):
+                _order = _order.build()
+
+            tasks.append(self.tda.place_order(account_id, _order))
+
+        await asyncio.gather(*tasks)
