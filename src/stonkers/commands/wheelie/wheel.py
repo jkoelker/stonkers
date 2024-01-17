@@ -215,10 +215,12 @@ class Wheel:
             f"[yellow]Warning: excess {put_call} ({excess})[/yellow]"
         )
 
-    async def __display_target(self, num_contracts, put_call: str) -> None:
+    async def __display_target(
+        self, num_contracts, target, put_call: str
+    ) -> None:
         target_display = join(
             f"Writing {number(num_contracts, precision=0 )} {put_call},",
-            f"target: {number(self.net_target_calls, precision=0)}",
+            f"target: {number(target, precision=0)}",
             f"max per day: {number(await self.maximum_new_contracts, precision=0)}",
         )
 
@@ -280,7 +282,9 @@ class Wheel:
             return self
 
         num_contracts = await self.to_write_calls
-        await self.__display_target(num_contracts, "calls")
+        await self.__display_target(
+            num_contracts, self.net_target_calls, "calls"
+        )
 
         option = conditions.best(
             await self.client.options(self.ticker),
@@ -373,7 +377,9 @@ class Wheel:
             return self
 
         num_contracts = await self.to_write_puts
-        await self.__display_target(num_contracts, "puts")
+        await self.__display_target(
+            num_contracts, await self.net_target_puts, "puts"
+        )
 
         option = conditions.best(
             await self.client.options(self.ticker),
