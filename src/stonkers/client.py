@@ -3,13 +3,61 @@
 import asyncio
 import dataclasses
 import datetime
+import email.utils
 
 import async_lru as alru
 import cachetools
 import tda.client  # type: ignore
+import tenacity
+import tenacity.wait
 
 from . import convert
 from .orders import OrderBuilder
+
+
+class RetryHTTPTooManyRequests(tenacity.retry_base):
+    # pylint: disable=too-few-public-methods
+
+    def __call__(self, state: tenacity.RetryCallState) -> bool:
+        if not state.outcome:
+            return False
+
+        exc = state.outcome.exception()
+        response = getattr(exc, "response", None)
+
+        if exc is None or response is None:
+            return False
+
+        if response.status_code == 429:
+            return True
+
+        return False
+
+
+class WaitRetryAfter(tenacity.wait.wait_base):
+    # pylint: disable=too-few-public-methods
+
+    def __call__(self, state: tenacity.RetryCallState) -> float:
+        if not state.outcome:
+            return 0
+
+        exc = state.outcome.exception()
+        response = getattr(exc, "response", None)
+
+        if exc is None or response is None:
+            return 0
+
+        after = response.headers.get("retry-after", "0")
+
+        if after.isdigit():
+            return int(after)
+
+        try:
+            when = email.utils.parsedate_to_datetime(after)
+        except (TypeError, ValueError):
+            return 0
+
+        return max(0, (when - datetime.datetime.utcnow()).total_seconds())
 
 
 @dataclasses.dataclass
@@ -32,6 +80,20 @@ class Client:
             options=cachetools.TTLCache(maxsize=1000, ttl=10),
             quotes=cachetools.TTLCache(maxsize=1000, ttl=10),
         )
+
+    @tenacity.retry(
+        reraise=True,
+        retry=RetryHTTPTooManyRequests(),
+        wait=tenacity.wait_combine(
+            WaitRetryAfter(), tenacity.wait_exponential(multiplier=0.2)
+        ),
+        stop=tenacity.stop_after_attempt(5),
+    )
+    async def _get(self, func, *args, **kwargs):
+        response = await func(*args, **kwargs)
+        response.raise_for_status()
+
+        return response
 
     @staticmethod
     def _accounts(accounts, dataframe=True, principals=None):
@@ -64,7 +126,7 @@ class Client:
         )
 
         accounts = (
-            [(await get_func(account_id, fields=fields)).json()]
+            [(await self._get(get_func, account_id, fields=fields)).json()]
             if account_id
             else (await get_func(fields=fields)).json()
         )
@@ -83,8 +145,10 @@ class Client:
             date = datetime.date.today()
 
         result = (
-            await self.tda.get_hours_for_multiple_markets(
-                markets=self.tda.Markets.EQUITY, date=date
+            await self._get(
+                self.tda.get_hours_for_multiple_markets,
+                markets=self.tda.Markets.EQUITY,
+                date=date,
             )
         ).json()
 
@@ -109,7 +173,7 @@ class Client:
     async def options(self, symbol, dataframe=True, **kwargs):
         if symbol not in self._cache.options:
             self._cache.options[symbol] = (
-                await self.tda.get_option_chain(symbol, **kwargs)
+                await self._get(self.tda.get_option_chain, symbol, **kwargs)
             ).json()
 
         options = self._cache.options[symbol]
@@ -120,7 +184,7 @@ class Client:
         return options
 
     async def _quote(self, symbols):
-        response = await self.tda.get_quotes(symbols)
+        response = await self._get(self.tda.get_quotes, symbols)
         response.raise_for_status()
 
         quotes = response.json()
@@ -184,7 +248,7 @@ class Client:
         return account["positions"].iloc[0]
 
     async def user_principals(self, dataframe=True):
-        principals = (await self.tda.get_user_principals()).json()
+        principals = (await self._get(self.tda.get_user_principals)).json()
 
         if dataframe:
             return convert.user_principals(principals)
@@ -200,7 +264,8 @@ class Client:
         dataframe=True,
     ):
         price_history = (
-            await self.tda.get_price_history_every_day(
+            await self._get(
+                self.tda.get_price_history_every_day,
                 symbol,
                 end_datetime=end_datetime,
                 start_datetime=start_datetime,
@@ -221,7 +286,7 @@ class Client:
             del self._cache.orders[account_id]
 
         for order in order_id:
-            await self.tda.cancel_order(account_id, order)
+            await self._get(self.tda.cancel_order, account_id, order)
 
     async def place_order(self, account_id, order):
         if isinstance(order, (dict, OrderBuilder)):
@@ -235,6 +300,6 @@ class Client:
             if isinstance(_order, OrderBuilder):
                 _order = _order.build()
 
-            tasks.append(self.tda.place_order(account_id, _order))
+            tasks.append(self._get(self.tda.place_order, account_id, _order))
 
         await asyncio.gather(*tasks)
