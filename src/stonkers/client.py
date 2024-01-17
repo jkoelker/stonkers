@@ -4,9 +4,11 @@ import asyncio
 import dataclasses
 import datetime
 import email.utils
+from typing import Optional
 
 import async_lru as alru
 import cachetools
+import httpx
 import tda.client  # type: ignore
 import tenacity
 import tenacity.wait
@@ -15,17 +17,22 @@ from . import convert
 from .orders import OrderBuilder
 
 
+def _get_response(
+    retry_state: tenacity.RetryCallState,
+) -> Optional[httpx.Response]:
+    if not retry_state.outcome:
+        return None
+
+    exc = retry_state.outcome.exception()
+    return getattr(exc, "response", None)
+
+
 class RetryHTTPTooManyRequests(tenacity.retry_base):
     # pylint: disable=too-few-public-methods
 
-    def __call__(self, state: tenacity.RetryCallState) -> bool:
-        if not state.outcome:
-            return False
-
-        exc = state.outcome.exception()
-        response = getattr(exc, "response", None)
-
-        if exc is None or response is None:
+    def __call__(self, retry_state: tenacity.RetryCallState) -> bool:
+        response = _get_response(retry_state)
+        if response is None:
             return False
 
         if response.status_code == 429:
@@ -37,14 +44,9 @@ class RetryHTTPTooManyRequests(tenacity.retry_base):
 class WaitRetryAfter(tenacity.wait.wait_base):
     # pylint: disable=too-few-public-methods
 
-    def __call__(self, state: tenacity.RetryCallState) -> float:
-        if not state.outcome:
-            return 0
-
-        exc = state.outcome.exception()
-        response = getattr(exc, "response", None)
-
-        if exc is None or response is None:
+    def __call__(self, retry_state: tenacity.RetryCallState) -> float:
+        response = _get_response(retry_state)
+        if response is None:
             return 0
 
         after = response.headers.get("retry-after", "0")
