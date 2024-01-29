@@ -41,7 +41,7 @@ stonkers = "stonkers.cli:cli"
 
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.0.3"
-black = "^23.12.1"
+black = "^24.1.1"
 ipython = "^8.19.0"
 datascroller = "^1.4.1"
 mypy = "^1.8.0"
