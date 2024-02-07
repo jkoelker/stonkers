@@ -15,10 +15,16 @@ def get_returns(bid, strike_price, dte):
 
 
 async def put_finder(
-    client, tickers, dte=60, pop_min=70, pop_max=90, return_min=20
+    client,
+    tickers,
+    dte_min=0,
+    dte_max=60,
+    pop_min=70,
+    pop_max=90,
+    return_min=20,
 ):
-    # Set the max DTE for options chains.
-    max_exp = dt.datetime.now() + dt.timedelta(days=dte)
+    """Find put options that meet our criteria."""
+    now = dt.datetime.now().date()
 
     # Get the options chain as a pandas dataframe. (Thanks dobby. 🤗)
     chains = []
@@ -27,7 +33,8 @@ async def put_finder(
             ticker,
             contract_type=client.tda.Options.ContractType.PUT,
             include_quotes=True,
-            to_date=max_exp,
+            from_date=now + dt.timedelta(days=dte_min - 1),
+            to_date=now + dt.timedelta(days=dte_max + 1),
             option_type=client.tda.Options.Type.STANDARD,
             dataframe=False,
         )
