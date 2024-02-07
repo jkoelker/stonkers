@@ -415,10 +415,17 @@ async def expiring_options(stonkers, dte, account_id):
 @options_group.command()
 @click.option(
     "-d",
-    "--dte",
+    "--dte-min",
+    default=0,
+    show_default=True,
+    help="Days to expiration min.",
+)
+@click.option(
+    "-D",
+    "--dte-max",
     default=60,
     show_default=True,
-    help="Days to expiration.",
+    help="Days to expiration max.",
 )
 @click.option(
     "-p",
@@ -452,13 +459,28 @@ async def expiring_options(stonkers, dte, account_id):
 @click.help_option("-h", "--help")
 @click.pass_obj
 # pylint: disable=too-many-arguments
-async def puts(stonkers, dte, pop_min, pop_max, return_min, exclude, tickers):
+async def puts(
+    stonkers,
+    dte_min,
+    dte_max,
+    pop_min,
+    pop_max,
+    return_min,
+    exclude,
+    tickers,
+):
     """Find options that meet an anual rate of return requirement."""
     if not tickers:
         tickers = stonkers.default_tickers(exclude)
 
     options = await commands.put_finder(
-        stonkers.client, tickers, dte, pop_min, pop_max, return_min
+        stonkers.client,
+        tickers,
+        dte_min,
+        dte_max,
+        pop_min,
+        pop_max,
+        return_min,
     )
     options = options[
         [
