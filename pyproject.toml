@@ -40,7 +40,7 @@ tenacity = "^8.2.3"
 stonkers = "stonkers.cli:cli"
 
 [tool.poetry.group.dev.dependencies]
-pylint = "^3.0.3"
+pylint = "^3.1.0"
 black = "^24.2.0"
 ipython = "^8.21.0"
 datascroller = "^1.4.1"
